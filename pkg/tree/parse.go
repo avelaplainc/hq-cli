@@ -203,9 +203,34 @@ func (b *builder) exprNode(expr hclsyntax.Expression) (*Node, error) {
 		if lo < 0 || hi > len(b.src) || lo > hi {
 			lo, hi = 0, 0
 		}
-		return &Node{Kind: KindString, Str: string(b.src[lo:hi])}, nil
+		return &Node{Kind: KindString, Str: stripTemplateQuotes(string(b.src[lo:hi]))}, nil
 	}
 	return ctyNode(val), nil
+}
+
+// stripTemplateQuotes removes the quote signs that the HCL source places
+// around a quoted template, when the whole fallback text is exactly one
+// quoted template, like "pre${var.x}post". Text that only begins and ends
+// with a quote, like the source of the expression "a" == "b", stays as is.
+func stripTemplateQuotes(s string) string {
+	if len(s) < 2 || s[0] != '"' || s[len(s)-1] != '"' {
+		return s
+	}
+	toks, diags := hclsyntax.LexConfig([]byte(s), "hq", hcl.InitialPos)
+	if diags.HasErrors() || len(toks) < 3 {
+		return s
+	}
+	last := len(toks) - 1
+	if toks[0].Type != hclsyntax.TokenOQuote || toks[last].Type != hclsyntax.TokenEOF ||
+		toks[last-1].Type != hclsyntax.TokenCQuote {
+		return s
+	}
+	for _, t := range toks[1 : last-1] {
+		if t.Type == hclsyntax.TokenOQuote || t.Type == hclsyntax.TokenCQuote {
+			return s // a quote pair inside means s spans more than the template
+		}
+	}
+	return s[1 : len(s)-1]
 }
 
 // exprKeyString returns the object constructor key as a literal string.

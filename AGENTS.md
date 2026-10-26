@@ -32,9 +32,13 @@ query error (also no matches with `-e`), `2` usage error.
 3. **Parse**: `tree.Parse(data, filename)` / `tree.ParseFile` build an
    ordered `*tree.Node` from `hclsyntax`.
 4. **Query mode**: `query.Eval(expr, root) ([]*tree.Node, error)`; each
-   match prints via `printNode`. No match prints nothing.
-5. **Format mode**: `renderWholeDoc` renders canonical HCL (hclwrite with
-   a source `lineMap`) or JSON via `renderJSON`; colors per `colors.go`.
+   match prints via `printNode` as JSON (compact with `-c`). No match
+   prints nothing. A segment that does not fit a node, like an index on
+   a string, is an error, like jq.
+5. **Format mode**: `renderWholeDoc` prints `formatHCL` output — pure
+   `hclwrite.Format`, the terraform fmt layout (no blank-line or CRLF
+   changes, idempotent) — or JSON via `renderJSON` (`-j`, `-c`); colors
+   per `colors.go`.
 
 Key model, `pkg/tree/node.go`: `Node{Kind, Bool, Num json.Number, Str,
 Fields []Field, Items []*Node}` with Kinds `KindNull/KindBool/
@@ -49,9 +53,9 @@ as a string by design (hq never resolves Terraform variables).
 
 ## Key Directories
 
-- `.` (main package) — CLI wiring, flags/argument resolution, whole-doc
-  HCL rendering (`formathcl.go`, `renderhcl.go`), ANSI palettes
-  (`colors.go`), plus the dev fixture `main.tf`.
+- `.` (main package) — CLI wiring, flags/argument resolution, HCL
+  format mode (`formathcl.go`), ANSI palettes (`colors.go`), plus the
+  dev fixture `main.tf`.
 - `pkg/tree` — HCL to ordered `Node` tree: `parse.go` (hclsyntax walk,
   block flattening, cty value extraction), `node.go` (model, ordered
   JSON).
@@ -114,13 +118,12 @@ and publishes release binaries on `v*` tags.
 
 | File | Role |
 |------|------|
-| `main.go` | entry point: flags, argument resolution, run loop, `printNode`, exit codes |
-| `formathcl.go` | hclwrite format engine: source `lineMap`, `=` alignment, blank-line rules, heredoc bytes kept |
-| `renderhcl.go` | whole-doc HCL rendering (normal and one-line compact) |
+| `main.go` | entry point: flags, argument resolution, run loop, `readInputs`, `printNode`, exit codes |
+| `formathcl.go` | format mode: `hclwrite.Format` plus colorizing; heredoc lines stay plain, output is idempotent |
 | `colors.go` | ANSI palette and TTY/env color decision |
 | `pkg/tree/parse.go` | `hclsyntax` walk to `Node`, block flattening, cty value extraction with source-text fallback |
-| `pkg/query/query.go` | grammar: `.a.b`, `a.b`, `["key"]`, `[i]` (negative ok), `[]`/`.*`/`*` splat, `\| keys`, `\| length` |
-| `build.sh`, `VERSION` | release build and version injection (0.1.0) |
+| `pkg/query/query.go` | grammar: `.a.b`, `a.b`, `["key"]`, `[i]` (negative ok), `[]`/`.*`/`*` splat, `\| keys`, `\| length`, `\| not` |
+| `build.sh`, `VERSION` | release build and version injection (0.2.0) |
 | `pipelines/ci.yml` | staged CI and the DevSecOps gate |
 | `.devcontainer/devcontainer.json` | Go 1.27 image, gh/golangci-lint/gotestsum features, warms module cache |
 | `README.md` | full user documentation: argument rules, output contract, query language, HCL-to-JSON mapping |
@@ -138,7 +141,7 @@ and publishes release binaries on `v*` tags.
 
 ## Testing & QA
 
-- Plain stdlib `testing`, no external test deps. 101 tests in
+- Plain stdlib `testing`, no external test deps. 106 tests in
   `main_test.go`, `pkg/tree/parse_test.go`,
   `pkg/query/query_test.go` + `fixture_test.go`.
 - Table-driven. CLI tests call `run(args, &out, &err)` directly with
@@ -155,7 +158,7 @@ and publishes release binaries on `v*` tags.
 ## Versioning and Releases
 
 - The current version lives in the `VERSION` file (semver, no `v`
-  prefix; 0.1.0). `build.sh` reads `VERSION` and injects it into every
+  prefix; 0.2.0). `build.sh` reads `VERSION` and injects it into every
   binary.
 - After finishing a task that changes user-visible behavior: bump
   `VERSION`, run `./build.sh`, commit the change together with

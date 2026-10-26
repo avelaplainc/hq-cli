@@ -124,11 +124,21 @@ none = null`,
 			},
 		},
 		{
-			name: "interpolation falls back to source text",
+			name: "interpolation falls back to the template text",
 			src:  `ami = "ami-${var.x}"`,
 			check: func(t *testing.T, root *Node) {
 				s := root.Get("ami")
-				if s.Kind != KindString || s.Str != `"ami-${var.x}"` {
+				if s.Kind != KindString || s.Str != `ami-${var.x}` {
+					t.Fatalf("wrong fallback: %+v", s)
+				}
+			},
+		},
+		{
+			name: "comparison keeps the whole source text",
+			src:  `same = "pre" == "${var.suffix}"`,
+			check: func(t *testing.T, root *Node) {
+				s := root.Get("same")
+				if s.Kind != KindString || s.Str != `"pre" == "${var.suffix}"` {
 					t.Fatalf("wrong fallback: %+v", s)
 				}
 			},
