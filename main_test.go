@@ -277,13 +277,44 @@ func TestRunMissingExpr(t *testing.T) {
 }
 
 func TestRunVersion(t *testing.T) {
-	var out, errBuf bytes.Buffer
-	code := run([]string{"--version"}, &out, &errBuf)
-	if code != 0 {
-		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
+	for _, flag := range []string{"-v", "--version"} {
+		var out, errBuf bytes.Buffer
+		code := run([]string{flag}, &out, &errBuf)
+		if code != 0 {
+			t.Fatalf("%s: exit code = %d, stderr = %q", flag, code, errBuf.String())
+		}
+		if out.String() != "hq version 0.1.0\n" {
+			t.Errorf("%s: stdout = %q, want %q", flag, out.String(), "hq version 0.1.0\n")
+		}
 	}
-	if out.String() != "hq version 0.1.0\n" {
-		t.Errorf("stdout = %q, want %q", out.String(), "hq version 0.1.0\n")
+}
+
+func TestRunLongFlags(t *testing.T) {
+	dir := t.TempDir()
+	path := writeFile(t, dir, "main.tf", "name = \"n\"\n")
+	// --compact and --raw behave like their short forms.
+	var out, errBuf bytes.Buffer
+	code := run([]string{"--compact", "--raw", ".name", path}, &out, &errBuf)
+	if code != 0 || out.String() != "n\n" {
+		t.Errorf("compact raw: code = %d, stdout = %q", code, out.String())
+	}
+	// --error exits 1 on no match.
+	out.Reset()
+	code = run([]string{"--error", ".missing", path}, &out, &errBuf)
+	if code != 1 {
+		t.Errorf("error: exit code = %d, want 1", code)
+	}
+	// --json with --compact prints one line of JSON for the whole doc.
+	out.Reset()
+	code = run([]string{"--json", "--compact", path}, &out, &errBuf)
+	if code != 0 || out.String() != `{"name":"n"}`+"\n" {
+		t.Errorf("json: code = %d, stdout = %q", code, out.String())
+	}
+	// --help prints the usage text and exits 0.
+	out.Reset()
+	code = run([]string{"--help"}, &out, &errBuf)
+	if code != 0 || !strings.Contains(out.String(), "Usage:") {
+		t.Errorf("help: code = %d, stdout = %q", code, out.String())
 	}
 }
 

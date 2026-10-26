@@ -35,7 +35,7 @@ Release build for all platforms:
 
 `build.sh` produces one binary per target, macOS, Linux, and Windows in
 amd64 and arm64, in `dist/`, plus `dist/SHA256SUMS`. The version is read
-from the `VERSION` file and injected at build time; `-version` prints it.
+from the `VERSION` file and injected at build time; `-v` prints it.
 
 Building requires Go 1.27 or later. The project depends on
 `github.com/hashicorp/hcl/v2` for parsing.
@@ -91,14 +91,14 @@ The sample file for this table appears in [Examples](#examples).
 
 | Flag | Effect |
 |------|--------|
-| `-c` | Print the output on one line: compact JSON for queries, compact HCL for the whole document (compact JSON with `-j`). |
-| `-j` | When there is no expression, print as JSON instead of formatted HCL. With an expression, `-j` has no effect: query results are already JSON. |
-| `-r` | Print scalar results raw (strings without quotes). Non-scalar results are unaffected. |
-| `-e` | Exit with code 1 when the query has no matches. |
-| `-C` | Force colors on. |
-| `-M` | Force colors off. Wins over `-C`. |
-| `-version` | Print the version. |
-| `-h`, `-help` | Print the usage text. |
+| `-c`, `--compact` | Print the output on one line: compact JSON for queries, compact HCL for the whole document (compact JSON with `-j`). |
+| `-j`, `--json` | When there is no expression, print as JSON instead of formatted HCL. With an expression, it has no effect: query results are already JSON. |
+| `-r`, `--raw` | Print scalar results raw (strings without quotes). Non-scalar results are unaffected. |
+| `-e`, `--error` | Exit with code 1 when the query has no matches. |
+| `-C`, `--color-output` | Force colors on. |
+| `-M`, `--monochrome-output` | Force colors off. Wins over `-C`. |
+| `-v`, `--version` | Print the version. |
+| `-h`, `--help` | Print the usage text. |
 
 ### Output contract
 

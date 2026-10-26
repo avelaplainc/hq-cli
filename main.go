@@ -31,16 +31,16 @@ Arguments:
             input file, not an expression.
 
 Flags (toggles, valid in any position):
-  -c        print the output on one line (compact JSON for queries,
-            compact HCL for the whole document)
-  -j        when there is no expression, print as JSON instead of
-            formatted HCL
-  -r        print scalar results raw, without quotes
-  -e        exit with code 1 when the query has no matches
-  -C        force colors on
-  -M        force colors off; wins over -C
-  -version  print the version
-  -h, -help print this usage
+  -c, --compact           print the output on one line (compact JSON for
+                          queries, compact HCL for the whole document)
+  -j, --json              when there is no expression, print as JSON
+                          instead of formatted HCL
+  -r, --raw               print scalar results raw, without quotes
+  -e, --error             exit with code 1 when the query has no matches
+  -C, --color-output      force colors on
+  -M, --monochrome-output force colors off; wins over -C
+  -v, --version           print the version
+  -h, --help              print this usage
 
 Output:
   With an expression, every match prints as pretty JSON that keeps
@@ -80,21 +80,21 @@ func run(args []string, stdout, stderr io.Writer) int {
 	var rest []string
 	for _, a := range args {
 		switch a {
-		case "-c", "--c":
+		case "-c", "--compact":
 			compact = true
 		case "-j", "--json":
 			jsonBool = true
-		case "-r", "--r":
+		case "-r", "--raw":
 			raw = true
-		case "-e", "--e":
+		case "-e", "--error":
 			failNoMatch = true
 		case "-C", "--color-output":
 			force = forceColor
 		case "-M", "--monochrome-output":
 			force = forceMono
-		case "-version", "--version":
+		case "-v", "--version":
 			showVersion = true
-		case "-h", "-help", "--help":
+		case "-h", "--help":
 			writeUsage(stdout)
 			return 0
 		case "-":
