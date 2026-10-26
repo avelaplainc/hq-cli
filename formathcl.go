@@ -273,7 +273,7 @@ func analyzeHCL(src []byte, filename string) (*lineMap, error) {
 	walkBody(f.Body.(*hclsyntax.Body))
 
 	// Heredoc content is string data, so blank lines inside it must stay.
-	hclsyntax.VisitAll(f.Body.(*hclsyntax.Body), func(n hclsyntax.Node) hcl.Diagnostics {
+	_ = hclsyntax.VisitAll(f.Body.(*hclsyntax.Body), func(n hclsyntax.Node) hcl.Diagnostics {
 		te, ok := n.(*hclsyntax.TemplateExpr)
 		if !ok {
 			return nil

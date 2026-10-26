@@ -330,7 +330,7 @@ func TestRunStdin(t *testing.T) {
 	defer func() { os.Stdin = old }()
 	var out, errBuf bytes.Buffer
 	code := run([]string{"-r", ".name"}, &out, &errBuf)
-	f.Close()
+	_ = f.Close()
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
 	}
@@ -555,7 +555,7 @@ func TestRunFormatStdinColored(t *testing.T) {
 	defer func() { os.Stdin = old }()
 	var out, errBuf bytes.Buffer
 	code := run([]string{"-C"}, &out, &errBuf)
-	f.Close()
+	_ = f.Close()
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
 	}
@@ -633,7 +633,7 @@ func TestRunPipedNoExprJson(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	os.Stdin = f
 	defer func() { os.Stdin = old }()
 	var out, errBuf bytes.Buffer

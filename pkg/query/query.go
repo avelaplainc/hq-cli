@@ -163,11 +163,11 @@ func (p *parser) bracketSegment() (segment, error) {
 	if p.eof() {
 		return segment{}, fmt.Errorf("query: missing ']' for '[' at offset %d", open)
 	}
-	switch c := p.cur(); {
-	case c == ']':
+	switch c := p.cur(); c {
+	case ']':
 		p.pos++
 		return segment{kind: segSplat}, nil
-	case c == '"':
+	case '"':
 		key, err := p.quotedKey()
 		if err != nil {
 			return segment{}, err

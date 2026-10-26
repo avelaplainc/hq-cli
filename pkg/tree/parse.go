@@ -33,7 +33,7 @@ func Parse(src []byte, filename string) (*Node, error) {
 
 // ParseFile reads a file and parses it as HCL.
 func ParseFile(path string) (*Node, error) {
-	src, err := os.ReadFile(path)
+	src, err := os.ReadFile(path) // #nosec G304
 	if err != nil {
 		return nil, fmt.Errorf("%s: read failed: %v", path, err)
 	}
@@ -159,7 +159,7 @@ func (b *builder) addBlock(obj *Node, block *hclsyntax.Block) error {
 			return nil
 		}
 		if existing.Kind != KindObject {
-			return fmt.Errorf("%s: line %d: the key %q holds a value. A block can not nest inside it.",
+			return fmt.Errorf("%s: line %d: the key %q holds a value, so a block can not nest inside it",
 				b.filename, lines[i], seg)
 		}
 		cur = existing

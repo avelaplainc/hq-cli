@@ -16,7 +16,7 @@ import (
 var version = "hq version 0.1.0"
 
 func writeUsage(w io.Writer) {
-	fmt.Fprint(w, `Usage: hq [flags] 'expr' [file ...]
+	_, _ = fmt.Fprint(w, `Usage: hq [flags] 'expr' [file ...]
        hq [flags] [file ...]
 
 hq parses HCL (HashiCorp Configuration Language) files, such as
@@ -101,7 +101,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 			rest = append(rest, a)
 		default:
 			if strings.HasPrefix(a, "-") {
-				fmt.Fprintf(stderr, "hq: unknown flag %q\n", a)
+				_, _ = fmt.Fprintf(stderr, "hq: unknown flag %q\n", a)
 				writeUsage(stderr)
 				return 2
 			}
@@ -109,18 +109,18 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	if showVersion {
-		fmt.Fprintln(stdout, version)
+		_, _ = fmt.Fprintln(stdout, version)
 		return 0
 	}
 	if len(rest) == 0 {
 		if stdinIsPiped() {
 			data, err := io.ReadAll(os.Stdin)
 			if err != nil {
-				fmt.Fprintf(stderr, "hq: read stdin: %v\n", err)
+				_, _ = fmt.Fprintf(stderr, "hq: read stdin: %v\n", err)
 				return 1
 			}
 			if err := renderWholeDoc(data, "(stdin)", compact, jsonBool, force, stdout); err != nil {
-				fmt.Fprintf(stderr, "hq: %v\n", err)
+				_, _ = fmt.Fprintf(stderr, "hq: %v\n", err)
 				return 1
 			}
 			return 0
@@ -137,11 +137,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 			if name == "-" {
 				data, err = io.ReadAll(os.Stdin)
 				if err != nil {
-					fmt.Fprintf(stderr, "hq: read stdin: %v\n", err)
+					_, _ = fmt.Fprintf(stderr, "hq: read stdin: %v\n", err)
 					return 1
 				}
-			} else if data, err = os.ReadFile(name); err != nil {
-				fmt.Fprintf(stderr, "hq: read %s: %v\n", name, err)
+			} else if data, err = os.ReadFile(name); err != nil { // #nosec G703,G304
+				_, _ = fmt.Fprintf(stderr, "hq: read %s: %v\n", name, err)
 				return 1
 			}
 			label := name
@@ -149,7 +149,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 				label = "(stdin)"
 			}
 			if err := renderWholeDoc(data, label, compact, jsonBool, force, stdout); err != nil {
-				fmt.Fprintf(stderr, "hq: %v\n", err)
+				_, _ = fmt.Fprintf(stderr, "hq: %v\n", err)
 				return 1
 			}
 		}
@@ -166,30 +166,30 @@ func run(args []string, stdout, stderr io.Writer) int {
 		if name == "-" {
 			data, err := io.ReadAll(os.Stdin)
 			if err != nil {
-				fmt.Fprintf(stderr, "hq: read stdin: %v\n", err)
+				_, _ = fmt.Fprintf(stderr, "hq: read stdin: %v\n", err)
 				return 1
 			}
 			root, err = tree.Parse(data, "(stdin)")
 			if err != nil {
-				fmt.Fprintf(stderr, "hq: %v\n", err)
+				_, _ = fmt.Fprintf(stderr, "hq: %v\n", err)
 				return 1
 			}
 		} else {
 			var err error
 			root, err = tree.ParseFile(name)
 			if err != nil {
-				fmt.Fprintf(stderr, "hq: %v\n", err)
+				_, _ = fmt.Fprintf(stderr, "hq: %v\n", err)
 				return 1
 			}
 		}
 		matches, err := query.Eval(expr, root)
 		if err != nil {
-			fmt.Fprintf(stderr, "hq: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "hq: %v\n", err)
 			return 1
 		}
 		for _, m := range matches {
 			if err := printNode(stdout, m, compact, raw, force); err != nil {
-				fmt.Fprintf(stderr, "hq: %v\n", err)
+				_, _ = fmt.Fprintf(stderr, "hq: %v\n", err)
 				return 1
 			}
 		}
@@ -203,7 +203,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 // isRegularFile tells if name names an existing regular file.
 func isRegularFile(name string) bool {
-	fi, err := os.Stat(name)
+	fi, err := os.Stat(name) // #nosec G703
 	return err == nil && fi.Mode().IsRegular()
 }
 

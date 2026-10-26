@@ -6,13 +6,6 @@ import (
 	"hq/pkg/tree"
 )
 
-// renderHCL writes the node as one line of plain HCL. The output is valid
-// HCL for an expression context: objects as '{ k = v }', tuples as
-// '[ a, b ]', scalars in literal form.
-func renderHCL(n *tree.Node) string {
-	return renderHCLP(n, plainPalette)
-}
-
 // renderHCLColored writes the node as one line of HCL with the palette.
 func renderHCLColored(n *tree.Node, p palette) string {
 	return renderHCLP(n, p)
