@@ -1,5 +1,7 @@
 # hq — jq-style queries for HCL files
 
+[![CI](https://github.com/avelaplainc/hq-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/avelaplainc/hq-cli/actions/workflows/ci.yml)
+
 ## Purpose
 
 `hq` is a single-binary command line tool that parses HCL (HashiCorp
