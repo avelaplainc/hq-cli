@@ -1,13 +1,21 @@
 {
+	// For format details, see https://aka.ms/devcontainer.json
 	"name": "hq",
-	"build": {
-		"context": "..",
-		"dockerfile": "Dockerfile"
+	// Curated Go image (Go 1.27, git, common utils), runs as non-root user
+	// `vscode`. Variant follows the official Go template default.
+	"image": "mcr.microsoft.com/devcontainers/go:2-1.27-trixie",
+	// Features add the Go dev tools. More info: https://containers.dev/features
+	"features": {
+		"ghcr.io/devcontainers/features/github-cli:1": {},
+		"ghcr.io/guiyomh/features/golangci-lint:0": {},
+		"ghcr.io/guiyomh/features/gotestsum:0": {}
 	},
+	// Warm the module cache with the pinned dependencies from go.sum.
+	"postCreateCommand": "go mod download",
 	"customizations": {
 		"vscode": {
 			"extensions": [
-				"golang.go"
+				"golang.Go"
 			]
 		}
 	}
