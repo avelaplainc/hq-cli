@@ -23,11 +23,37 @@ or a JSON rendering of the whole file.
 
 ## Install
 
-Development build:
+Download a binary from the [releases page](https://github.com/avelaplainc/hq-cli/releases). One line, any platform — swap the OS and arch in the URL:
+
+```sh
+# Linux amd64
+curl -fsSL https://github.com/avelaplainc/hq-cli/releases/latest/download/hq-linux-amd64 -o hq && chmod +x hq && sudo mv hq /usr/local/bin/
+
+# Linux arm64
+curl -fsSL https://github.com/avelaplainc/hq-cli/releases/latest/download/hq-linux-arm64 -o hq && chmod +x hq && sudo mv hq /usr/local/bin/
+
+# macOS (arm64 Apple Silicon, use hq-darwin-amd64 on Intel)
+curl -fsSL https://github.com/avelaplainc/hq-cli/releases/latest/download/hq-darwin-arm64 -o hq && chmod +x hq && sudo mv hq /usr/local/bin/
+```
+
+Windows (PowerShell):
+
+```powershell
+curl.exe -fsSL https://github.com/avelaplainc/hq-cli/releases/latest/download/hq-windows-amd64.exe -o hq.exe
+```
+
+Verify a download against `SHA256SUMS` from the same release:
+
+```sh
+sha256sum -c SHA256SUMS
+```
+
+Build from source instead:
 
 ```sh
 go build -o hq .
 ```
+
 
 Release build for all platforms:
 
