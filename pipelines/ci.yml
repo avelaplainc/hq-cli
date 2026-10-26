@@ -1,0 +1,25 @@
+# CI for hq. Triggered on main. Builds the release binaries for all
+# supported platforms and publishes them as pipeline artifacts.
+trigger:
+  - main
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - task: UseGo@1
+    displayName: Use Go 1.27
+    inputs:
+      versionSpec: '1.27'
+
+  - script: go test ./...
+    displayName: Run tests
+
+  - script: ./build.sh
+    displayName: Build all platforms
+
+  - task: PublishBuildArtifacts@1
+    displayName: Publish dist artifact
+    inputs:
+      PathtoPublish: dist
+      ArtifactName: hq-dist
