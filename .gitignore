@@ -1,2 +1,21 @@
+# Build output
 dist/
-hq
+/hq
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test and tooling artifacts
+*.test
+*.out
+go.work.sum
+
+# Environment
+.env
+.env.*
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
