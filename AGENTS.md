@@ -35,10 +35,12 @@ query error (also no matches with `-e`), `2` usage error.
    match prints via `printNode` as JSON (compact with `-c`). No match
    prints nothing. A segment that does not fit a node, like an index on
    a string, is an error, like jq.
-5. **Format mode**: `renderWholeDoc` prints `formatHCL` output — pure
-   `hclwrite.Format`, the terraform fmt layout (no blank-line or CRLF
-   changes, idempotent) — or JSON via `renderJSON` (`-j`, `-c`); colors
-   per `colors.go`.
+5. **Format mode**: `renderWholeDoc` prints `formatHCL` output, or JSON
+   via `renderJSON` (`-j`, `-c`); colors per `colors.go`. Layout:
+   `hclwrite.Format` (the terraform fmt engine), then `expandInlineObjects`
+   splits objects written on one line into one line per property, then a
+   second `hclwrite.Format` aligns the new lines. Single-line blocks stay
+   single-line; heredoc content and blank lines are untouched; idempotent.
 
 Key model, `pkg/tree/node.go`: `Node{Kind, Bool, Num json.Number, Str,
 Fields []Field, Items []*Node}` with Kinds `KindNull/KindBool/
@@ -123,7 +125,7 @@ and publishes release binaries on `v*` tags.
 | `colors.go` | ANSI palette and TTY/env color decision |
 | `pkg/tree/parse.go` | `hclsyntax` walk to `Node`, block flattening, cty value extraction with source-text fallback |
 | `pkg/query/query.go` | grammar: `.a.b`, `a.b`, `["key"]`, `[i]` (negative ok), `[]`/`.*`/`*` splat, `\| keys`, `\| length`, `\| not` |
-| `build.sh`, `VERSION` | release build and version injection (0.2.0) |
+| `build.sh`, `VERSION` | release build and version injection (0.1.3) |
 | `pipelines/ci.yml` | staged CI and the DevSecOps gate |
 | `.devcontainer/devcontainer.json` | Go 1.27 image, gh/golangci-lint/gotestsum features, warms module cache |
 | `README.md` | full user documentation: argument rules, output contract, query language, HCL-to-JSON mapping |
@@ -158,7 +160,7 @@ and publishes release binaries on `v*` tags.
 ## Versioning and Releases
 
 - The current version lives in the `VERSION` file (semver, no `v`
-  prefix; 0.2.0). `build.sh` reads `VERSION` and injects it into every
+  prefix; 0.1.3). `build.sh` reads `VERSION` and injects it into every
   binary.
 - After finishing a task that changes user-visible behavior: bump
   `VERSION`, run `./build.sh`, and commit the change together with

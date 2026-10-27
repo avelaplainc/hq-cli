@@ -148,14 +148,16 @@ The sample file for this table appears in [Examples](#examples).
 - Default: the formatted HCL document. `-j`: pretty JSON of the whole
   tree. `-c`: one line of compact JSON.
 - The HCL layout is `hclwrite.Format`, the same engine terraform fmt
-  uses:
+  uses, plus one `hq` rule on top:
   - two-space indent and `=` alignment;
+  - every object with one or more properties is written one property
+    per line, even when the source writes it on one line. Single-line
+    blocks (such as `b { x = 1 }`) stay single-line, like terraform fmt.
+    Objects without properties (such as `{}`) stay inline;
   - blank lines are kept exactly as written: none are added, removed,
     or collapsed, and newlines at the end of the file stay;
   - CRLF line endings are kept, so formatting a CRLF file does not
     rewrite every line;
-  - single-line blocks and objects stay single-line until the source
-    itself breaks them;
   - heredoc content stays byte for byte;
   - formatting is idempotent: `hq` of `hq file` is `hq file`.
 

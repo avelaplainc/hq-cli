@@ -283,8 +283,8 @@ func TestRunVersion(t *testing.T) {
 		if code != 0 {
 			t.Fatalf("%s: exit code = %d, stderr = %q", flag, code, errBuf.String())
 		}
-		if out.String() != "hq version 0.2.0\n" {
-			t.Errorf("%s: stdout = %q, want %q", flag, out.String(), "hq version 0.2.0\n")
+		if out.String() != "hq version 0.1.2\n" {
+			t.Errorf("%s: stdout = %q, want %q", flag, out.String(), "hq version 0.1.2\n")
 		}
 	}
 }
@@ -443,7 +443,7 @@ func TestRunFormatStdinInvalid(t *testing.T) {
 	}
 }
 
-func TestRunFormatKeepsInlineObjects(t *testing.T) {
+func TestRunFormatExpandsInlineObjects(t *testing.T) {
 	dir := t.TempDir()
 	path := writeFile(t, dir, "main.tf",
 		`output "mock" { value = { location = var.location, prefix = var.p, tags = var.tags } }`+"\n")
@@ -452,9 +452,13 @@ func TestRunFormatKeepsInlineObjects(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
 	}
-	// A single-line block or object with no newline stays one line,
-	// like terraform fmt.
-	want := "output \"mock\" { value = { location = var.location, prefix = var.p, tags = var.tags } }\n"
+	// A single-line block stays one line, like terraform fmt. An object
+	// with properties becomes one line per property.
+	want := "output \"mock\" { value = {\n" +
+		"  location = var.location\n" +
+		"  prefix   = var.p\n" +
+		"  tags     = var.tags\n" +
+		"} }\n"
 	if out.String() != want {
 		t.Errorf("stdout = %q, want %q", out.String(), want)
 	}
@@ -471,6 +475,71 @@ func TestRunFormatKeepsTuplesAndCallsInline(t *testing.T) {
 		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
 	}
 	want := "locals { ports = join(\",\", [80, 443]) }\nmsg = \"a${map({ k = 1 })}b\"\n"
+	if out.String() != want {
+		t.Errorf("stdout = %q, want %q", out.String(), want)
+	}
+}
+
+func TestRunFormatExpandsRulesInArray(t *testing.T) {
+	dir := t.TempDir()
+	path := writeFile(t, dir, "main.tf",
+		"rules = [\n"+
+			`  { name = "Atfinity", source_addresses = ["10.11.4.128/25"], destination_fqdns = ["atfinity.hydrus.intern"] },`+"\n"+
+			`  { name = "Metaco", protocols = [{ port = 80, type = "Http" }, { port = 443, type = "Https" }] }`+"\n"+
+			"]\n")
+	var out, errBuf bytes.Buffer
+	code := runWithStdin(path, &out, &errBuf)
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
+	}
+	want := "rules = [\n" +
+		"  {\n" +
+		"    name              = \"Atfinity\"\n" +
+		"    source_addresses  = [\"10.11.4.128/25\"]\n" +
+		"    destination_fqdns = [\"atfinity.hydrus.intern\"]\n" +
+		"  },\n" +
+		"  {\n" +
+		"    name = \"Metaco\"\n" +
+		"    protocols = [{\n" +
+		"      port = 80\n" +
+		`      type = "Http"` + "\n" +
+		"      }, {\n" +
+		"      port = 443\n" +
+		`      type = "Https"` + "\n" +
+		"    }]\n" +
+		"  }\n" +
+		"]\n"
+	if out.String() != want {
+		t.Errorf("stdout = %q, want %q", out.String(), want)
+	}
+}
+
+func TestRunFormatHeredocObjectsKept(t *testing.T) {
+	dir := t.TempDir()
+	path := writeFile(t, dir, "main.tf",
+		"a = 1\nu = <<EOT\n{ name = \"fake\", x = 1 }\nEOT\nb = 2\n")
+	var out, errBuf bytes.Buffer
+	code := runWithStdin(path, &out, &errBuf)
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
+	}
+	// Heredoc content is data, not structure: it stays on one line.
+	want := "a = 1\nu = <<EOT\n{ name = \"fake\", x = 1 }\nEOT\nb = 2\n"
+	if out.String() != want {
+		t.Errorf("stdout = %q, want %q", out.String(), want)
+	}
+}
+
+func TestRunFormatExpandsCRLF(t *testing.T) {
+	dir := t.TempDir()
+	path := writeFile(t, dir, "main.tf",
+		`output "o" { v = { a = 1, b = 2 } }`+"\r\n")
+	var out, errBuf bytes.Buffer
+	code := runWithStdin(path, &out, &errBuf)
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
+	}
+	want := "output \"o\" { v = {\r\n  a = 1\r\n  b = 2\r\n} }\r\n"
 	if out.String() != want {
 		t.Errorf("stdout = %q, want %q", out.String(), want)
 	}
@@ -670,7 +739,7 @@ func TestRunFormatCRLFKept(t *testing.T) {
 func TestRunFormatIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	path := writeFile(t, dir, "main.tf",
-		"a  =    1\nname=\"x\"\n\n\nb {\n  y = 2\n      z   = \"s\"\n}\n")
+		"a  =    1\nrules = [{ name = \"A\", x = 1 }, { name = \"B\", y = 2 }]\n\n\nb {\n  y = 2\n      z   = \"s\"\n}\n")
 	var out, errBuf bytes.Buffer
 	code := runWithStdin(path, &out, &errBuf)
 	if code != 0 {
