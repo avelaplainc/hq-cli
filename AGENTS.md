@@ -56,8 +56,7 @@ as a string by design (hq never resolves Terraform variables).
 ## Key Directories
 
 - `.` (main package) — CLI wiring, flags/argument resolution, HCL
-  format mode (`formathcl.go`), ANSI palettes (`colors.go`), plus the
-  dev fixture `main.tf`.
+  format mode (`formathcl.go`), ANSI palettes (`colors.go`).
 - `pkg/tree` — HCL to ordered `Node` tree: `parse.go` (hclsyntax walk,
   block flattening, cty value extraction), `node.go` (model, ordered
   JSON).
@@ -74,7 +73,7 @@ as a string by design (hq never resolves Terraform variables).
 
 ```sh
 go build -o hq .                        # development build
-go run . '.resource.aws_instance.web.ami' main.tf
+go run . '.resource.aws_instance.web.ami' testdata/sample.tf
 go test ./...                           # all tests
 gofmt -l . && go vet ./...              # formatting and vet gate
 ./build.sh                              # release build, all 6 platforms
