@@ -13,7 +13,7 @@ import (
 
 // version is the default for development builds; build.sh injects the
 // value from the VERSION file with -ldflags -X.
-var version = "hq version 0.2.0"
+var version = "hq version 0.1.2"
 
 func writeUsage(w io.Writer) {
 	_, _ = fmt.Fprint(w, `Usage: hq [flags] 'expr' [file ...]
