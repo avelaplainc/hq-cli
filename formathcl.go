@@ -195,19 +195,19 @@ func scanLine(line string, prevc byte) ([]span, byte) {
 			if c != ' ' && c != '\t' && c != '\r' {
 				prevc = c
 			}
-			switch {
-			case c == '"':
+			switch c {
+			case '"':
 				stack = append(stack, frame{kind: 'Q'})
-			case c == '\'':
+			case '\'':
 				stack = append(stack, frame{kind: 'S'})
-			case c == '{':
+			case '{':
 				s := span{start: i, pbBase: pb, obj: braces > 0}
 				if braces == 0 {
 					s.obj = objByte(line, i, old)
 				}
 				braces++
 				active = append(active, s)
-			case c == '}':
+			case '}':
 				if braces > 0 {
 					braces--
 					s := active[len(active)-1]
@@ -217,17 +217,17 @@ func scanLine(line string, prevc byte) ([]span, byte) {
 						spans = append(spans, s)
 					}
 				}
-			case c == '(' || c == '[':
+			case '(', '[':
 				pb++
-			case c == ')' || c == ']':
+			case ')', ']':
 				if pb > 0 {
 					pb--
 				}
-			case c == '=':
+			case '=':
 				if n := len(active); n > 0 {
 					active[n-1].hasProp = true
 				}
-			case c == ',':
+			case ',':
 				if n := len(active); n > 0 && pb == active[n-1].pbBase {
 					active[n-1].commas = append(active[n-1].commas, i)
 				}
@@ -252,14 +252,14 @@ func scanLine(line string, prevc byte) ([]span, byte) {
 			}
 			i++
 		case 'I':
-			switch {
-			case c == '"':
+			switch c {
+			case '"':
 				stack = append(stack, frame{kind: 'Q'})
-			case c == '\'':
+			case '\'':
 				stack = append(stack, frame{kind: 'S'})
-			case c == '{' || c == '(' || c == '[':
+			case '{', '(', '[':
 				f.depth++
-			case c == '}' || c == ')' || c == ']':
+			case '}', ')', ']':
 				if f.depth > 0 {
 					f.depth--
 				} else if c == '}' {
