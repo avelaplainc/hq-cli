@@ -161,9 +161,13 @@ and publishes release binaries on `v*` tags.
   prefix; 0.2.0). `build.sh` reads `VERSION` and injects it into every
   binary.
 - After finishing a task that changes user-visible behavior: bump
-  `VERSION`, run `./build.sh`, commit the change together with
-  `VERSION`, and create an annotated tag `v<version>`. Non-behavior
-  changes (CI, lint, security dep bumps) keep the version.
+  `VERSION`, run `./build.sh`, and commit the change together with
+  `VERSION`. Non-behavior changes (CI, lint, security dep bumps) keep
+  the version.
+- Do not push to GitHub and do not create the `v<version>` tag until
+  the user asks for it explicitly. Every round, recompilation, and
+  iteration may rebuild the binaries with `./build.sh` in `dist/`
+  locally, but nothing is uploaded or published.
 - `./build.sh` rebuilds `dist/` for all six platforms: macOS, Linux,
   and Windows in amd64 and arm64.
 
