@@ -47,7 +47,7 @@ func TestRunPrintsPrettyJSON(t *testing.T) {
 	}
 }
 
-func TestRunPrintsCompactHCL(t *testing.T) {
+func TestRunPrintsCompactJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := writeFile(t, dir, "main.tf", "tags = {\n  name = \"web\"\n  env = \"dev\"\n}\n")
 	var out, errBuf bytes.Buffer
@@ -55,10 +55,13 @@ func TestRunPrintsCompactHCL(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
 	}
-	// Compact output is one line of valid HCL.
-	want := "{ name = \"web\", env = \"dev\" }\n"
+	// -c prints one line of compact JSON, like jq -c.
+	want := "{\"name\":\"web\",\"env\":\"dev\"}\n"
 	if out.String() != want {
 		t.Errorf("stdout = %q, want %q", out.String(), want)
+	}
+	if !json.Valid(out.Bytes()) {
+		t.Errorf("stdout is not valid JSON: %q", out.String())
 	}
 }
 
@@ -89,7 +92,7 @@ func TestRunNoHTMLEscape(t *testing.T) {
 	}
 }
 
-func TestRunCompactHCLRoundTrip(t *testing.T) {
+func TestRunCompactJSONParses(t *testing.T) {
 	dir := t.TempDir()
 	path := writeFile(t, dir, "main.tf",
 		`output "mock" { value = { prefix = "p1", tls = true, ports = [80, 443] } }`+"\n")
@@ -98,16 +101,13 @@ func TestRunCompactHCLRoundTrip(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
 	}
-	want := "{ prefix = \"p1\", tls = true, ports = [80, 443] }\n"
+	want := "{\"prefix\":\"p1\",\"tls\":true,\"ports\":[80,443]}\n"
 	if out.String() != want {
 		t.Errorf("stdout = %q, want %q", out.String(), want)
 	}
-	// The compact line must be valid HCL: feed it back through hq.
-	round := writeFile(t, dir, "round.tf", "value = "+out.String())
-	var out2, errBuf2 bytes.Buffer
-	code = run([]string{"-c", ".value.prefix", round}, &out2, &errBuf2)
-	if code != 0 || out2.String() != "\"p1\"\n" {
-		t.Errorf("round trip: code = %d, stdout = %q, stderr = %q", code, out2.String(), errBuf2.String())
+	var v map[string]any
+	if err := json.Unmarshal(out.Bytes(), &v); err != nil {
+		t.Errorf("compact output is not valid JSON: %v", err)
 	}
 }
 
@@ -283,8 +283,8 @@ func TestRunVersion(t *testing.T) {
 		if code != 0 {
 			t.Fatalf("%s: exit code = %d, stderr = %q", flag, code, errBuf.String())
 		}
-		if out.String() != "hq version 0.1.0\n" {
-			t.Errorf("%s: stdout = %q, want %q", flag, out.String(), "hq version 0.1.0\n")
+		if out.String() != "hq version 0.2.0\n" {
+			t.Errorf("%s: stdout = %q, want %q", flag, out.String(), "hq version 0.2.0\n")
 		}
 	}
 }
@@ -372,13 +372,15 @@ func TestRunFormatStdin(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
 	}
-	want := "a    = 1\n\nname = \"x\"\n"
+	// hclwrite.Format matches terraform fmt: alignment on, no inserted
+	// blank line between the two attributes.
+	want := "a    = 1\nname = \"x\"\n"
 	if out.String() != want {
 		t.Errorf("stdout = %q, want %q", out.String(), want)
 	}
 }
 
-func TestRunFormatSeparations(t *testing.T) {
+func TestRunFormatKeepsBlankLines(t *testing.T) {
 	dir := t.TempDir()
 	path := writeFile(t, dir, "main.tf",
 		"b { x = 1 }\n\n\n\n\nb2 {\ny = 2\nc = 3\n}\n")
@@ -387,8 +389,9 @@ func TestRunFormatSeparations(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
 	}
-	// Single-line blocks are expanded to the canonical multi-line form.
-	want := "b {\n  x = 1\n}\n\nb2 {\n  y = 2\n\n  c = 3\n}\n"
+	// terraform fmt adds no blank line and removes none: the three blank
+	// lines stay and the single-line block stays on one line.
+	want := "b { x = 1 }\n\n\n\n\nb2 {\n  y = 2\n  c = 3\n}\n"
 	if out.String() != want {
 		t.Errorf("stdout = %q, want %q", out.String(), want)
 	}
@@ -403,7 +406,7 @@ func TestRunFormatHeredocBlankKept(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
 	}
-	want := "a = 1\n\nu = <<EOT\nline1\n\n\nline2\nEOT\n\nb = 2\n"
+	want := "a = 1\nu = <<EOT\nline1\n\n\nline2\nEOT\nb = 2\n"
 	if out.String() != want {
 		t.Errorf("stdout = %q, want %q", out.String(), want)
 	}
@@ -418,7 +421,7 @@ func TestRunFormatCommentAttached(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
 	}
-	want := "a = 1\n\n# note for b\nb = 2\n"
+	want := "a = 1\n# note for b\nb = 2\n"
 	if out.String() != want {
 		t.Errorf("stdout = %q, want %q", out.String(), want)
 	}
@@ -440,7 +443,7 @@ func TestRunFormatStdinInvalid(t *testing.T) {
 	}
 }
 
-func TestRunFormatExpandsInlineObjects(t *testing.T) {
+func TestRunFormatKeepsInlineObjects(t *testing.T) {
 	dir := t.TempDir()
 	path := writeFile(t, dir, "main.tf",
 		`output "mock" { value = { location = var.location, prefix = var.p, tags = var.tags } }`+"\n")
@@ -449,7 +452,9 @@ func TestRunFormatExpandsInlineObjects(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
 	}
-	want := "output \"mock\" {\n  value = {\n    location = var.location\n    prefix   = var.p\n    tags     = var.tags\n  }\n}\n"
+	// A single-line block or object with no newline stays one line,
+	// like terraform fmt.
+	want := "output \"mock\" { value = { location = var.location, prefix = var.p, tags = var.tags } }\n"
 	if out.String() != want {
 		t.Errorf("stdout = %q, want %q", out.String(), want)
 	}
@@ -465,22 +470,7 @@ func TestRunFormatKeepsTuplesAndCallsInline(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
 	}
-	want := "locals {\n  ports = join(\",\", [80, 443])\n}\n\nmsg = \"a${map({ k = 1 })}b\"\n"
-	if out.String() != want {
-		t.Errorf("stdout = %q, want %q", out.String(), want)
-	}
-}
-
-func TestRunFormatNestedBlocksInline(t *testing.T) {
-	dir := t.TempDir()
-	path := writeFile(t, dir, "main.tf",
-		`resource "aws_x" "y" { settings { mode = "on" } count = 2 }`+"\n")
-	var out, errBuf bytes.Buffer
-	code := runWithStdin(path, &out, &errBuf)
-	if code != 0 {
-		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
-	}
-	want := "resource \"aws_x\" \"y\" {\n  settings {\n    mode = \"on\"\n  }\n\n  count = 2\n}\n"
+	want := "locals { ports = join(\",\", [80, 443]) }\nmsg = \"a${map({ k = 1 })}b\"\n"
 	if out.String() != want {
 		t.Errorf("stdout = %q, want %q", out.String(), want)
 	}
@@ -588,17 +578,16 @@ func TestRunFileArgWithoutExpr(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
 	}
-	if got := out.String(); !strings.Contains(got, "output \"mock\" {\n") ||
-		!strings.Contains(got, `value = "v"`) {
+	if got := out.String(); got != "output \"mock\" { value = \"v\" }\n" {
 		t.Errorf("stdout = %q", got)
 	}
-	// -c prints compact HCL on one line.
+	// -c prints one line of compact JSON.
 	out.Reset()
 	code = run([]string{"-c", path}, &out, &errBuf)
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
 	}
-	if got := out.String(); !strings.Contains(got, `{ output = { mock = { value = "v" } } }`) {
+	if got := out.String(); got != `{"output":{"mock":{"value":"v"}}}`+"\n" {
 		t.Errorf("stdout = %q", got)
 	}
 	// -j prints the whole tree as JSON.
@@ -661,5 +650,71 @@ func TestRunColoredOutput(t *testing.T) {
 		if !strings.Contains(s, code) {
 			t.Errorf("stdout = %q, missing color code %q", s, code)
 		}
+	}
+}
+
+func TestRunFormatCRLFKept(t *testing.T) {
+	dir := t.TempDir()
+	path := writeFile(t, dir, "main.tf", "locals {\r\n  a = 1\r\n\r\n  b = 2\r\n}\r\n")
+	var out, errBuf bytes.Buffer
+	code := runWithStdin(path, &out, &errBuf)
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
+	}
+	want := "locals {\r\n  a = 1\r\n\r\n  b = 2\r\n}\r\n"
+	if out.String() != want {
+		t.Errorf("stdout = %q, want %q", out.String(), want)
+	}
+}
+
+func TestRunFormatIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	path := writeFile(t, dir, "main.tf",
+		"a  =    1\nname=\"x\"\n\n\nb {\n  y = 2\n      z   = \"s\"\n}\n")
+	var out, errBuf bytes.Buffer
+	code := runWithStdin(path, &out, &errBuf)
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr = %q", code, errBuf.String())
+	}
+	first := out.String()
+	out.Reset()
+	runWithStdin(writeFile(t, dir, "pass2.tf", first), &out, &errBuf)
+	if out.String() != first {
+		t.Errorf("second pass (=%q) differs from first (=%q)", out.String(), first)
+	}
+}
+
+func TestRunQueryTypeError(t *testing.T) {
+	dir := t.TempDir()
+	path := writeFile(t, dir, "main.tf", "name = \"n\"\n")
+	var out, errBuf bytes.Buffer
+	code := run([]string{".name[0]", path}, &out, &errBuf)
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	if !strings.HasPrefix(errBuf.String(), "hq: query: can not index") {
+		t.Errorf("stderr = %q, want an index type error", errBuf.String())
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout = %q, want empty", out.String())
+	}
+}
+
+func TestRunReadErrorPrintsNothing(t *testing.T) {
+	dir := t.TempDir()
+	good := writeFile(t, dir, "a.tf", "name = \"first\"\n")
+	missing := filepath.Join(t.TempDir(), "absent.tf")
+	var out, errBuf bytes.Buffer
+	// Format mode: a good file followed by a missing one must print no
+	// partial output for the good file.
+	code := run([]string{good, missing}, &out, &errBuf)
+	if code != 1 {
+		t.Errorf("format mode: exit code = %d, want 1", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("format mode: stdout = %q, want empty", out.String())
+	}
+	if !strings.Contains(errBuf.String(), "read") {
+		t.Errorf("format mode: stderr = %q, want a read error", errBuf.String())
 	}
 }

@@ -13,7 +13,7 @@ import (
 
 // version is the default for development builds; build.sh injects the
 // value from the VERSION file with -ldflags -X.
-var version = "hq version 0.1.0"
+var version = "hq version 0.2.0"
 
 func writeUsage(w io.Writer) {
 	_, _ = fmt.Fprint(w, `Usage: hq [flags] 'expr' [file ...]
@@ -31,8 +31,7 @@ Arguments:
             input file, not an expression.
 
 Flags (toggles, valid in any position):
-  -c, --compact           print the output on one line (compact JSON for
-                          queries, compact HCL for the whole document)
+  -c, --compact           print the output on one line, as compact JSON
   -j, --json              when there is no expression, print as JSON
                           instead of formatted HCL
   -r, --raw               print scalar results raw, without quotes
@@ -48,7 +47,7 @@ Output:
   match as one line of compact JSON. A query with no matches prints
   nothing and exits 0.
   Without an expression, the output is the formatted HCL document,
-  or JSON with -j.
+  compact JSON with -c, or JSON with -j.
   Colors are on when standard output is a terminal, like jq; -C
   and -M override them.
 
@@ -113,42 +112,33 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	if len(rest) == 0 {
-		if stdinIsPiped() {
-			data, err := io.ReadAll(os.Stdin)
-			if err != nil {
-				_, _ = fmt.Fprintf(stderr, "hq: read stdin: %v\n", err)
-				return 1
-			}
-			if err := renderWholeDoc(data, "(stdin)", compact, jsonBool, force, stdout); err != nil {
-				_, _ = fmt.Fprintf(stderr, "hq: %v\n", err)
-				return 1
-			}
-			return 0
+		if !stdinIsPiped() {
+			writeUsage(stderr)
+			return 2
 		}
-		writeUsage(stderr)
-		return 2
+		docs, err := readInputs([]string{"-"})
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "hq: %v\n", err)
+			return 1
+		}
+		if err := renderWholeDoc(docs[0].data, docs[0].name, compact, jsonBool, force, stdout); err != nil {
+			_, _ = fmt.Fprintf(stderr, "hq: %v\n", err)
+			return 1
+		}
+		return 0
 	}
 	// A first argument that names an existing file is the input file, not
 	// an expression. The default output is formatted HCL, like the pipe.
 	if rest[0] == "-" || isRegularFile(rest[0]) {
-		for _, name := range rest {
-			var data []byte
-			var err error
-			if name == "-" {
-				data, err = io.ReadAll(os.Stdin)
-				if err != nil {
-					_, _ = fmt.Fprintf(stderr, "hq: read stdin: %v\n", err)
-					return 1
-				}
-			} else if data, err = os.ReadFile(name); err != nil { // #nosec G703,G304
-				_, _ = fmt.Fprintf(stderr, "hq: read %s: %v\n", name, err)
-				return 1
-			}
-			label := name
-			if name == "-" {
-				label = "(stdin)"
-			}
-			if err := renderWholeDoc(data, label, compact, jsonBool, force, stdout); err != nil {
+		// Read every input before printing anything, so a read error can
+		// not leave partial output on stdout.
+		docs, err := readInputs(rest)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "hq: %v\n", err)
+			return 1
+		}
+		for _, doc := range docs {
+			if err := renderWholeDoc(doc.data, doc.name, compact, jsonBool, force, stdout); err != nil {
 				_, _ = fmt.Fprintf(stderr, "hq: %v\n", err)
 				return 1
 			}
@@ -160,27 +150,19 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if len(files) == 0 {
 		files = []string{"-"}
 	}
+	// Read every input before printing anything, so a read error can
+	// not leave partial output on stdout.
+	docs, err := readInputs(files)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "hq: %v\n", err)
+		return 1
+	}
 	total := 0
-	for _, name := range files {
-		var root *tree.Node
-		if name == "-" {
-			data, err := io.ReadAll(os.Stdin)
-			if err != nil {
-				_, _ = fmt.Fprintf(stderr, "hq: read stdin: %v\n", err)
-				return 1
-			}
-			root, err = tree.Parse(data, "(stdin)")
-			if err != nil {
-				_, _ = fmt.Fprintf(stderr, "hq: %v\n", err)
-				return 1
-			}
-		} else {
-			var err error
-			root, err = tree.ParseFile(name)
-			if err != nil {
-				_, _ = fmt.Fprintf(stderr, "hq: %v\n", err)
-				return 1
-			}
+	for _, doc := range docs {
+		root, err := tree.Parse(doc.data, doc.name)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "hq: %v\n", err)
+			return 1
 		}
 		matches, err := query.Eval(expr, root)
 		if err != nil {
@@ -207,8 +189,37 @@ func isRegularFile(name string) bool {
 	return err == nil && fi.Mode().IsRegular()
 }
 
+// inputDoc is one input document: its bytes and its display name.
+type inputDoc struct {
+	name string
+	data []byte
+}
+
+// readInputs reads every named file, in order. A "-" reads standard input.
+// It reads all inputs before any output, so a read error can not leave
+// partial results on stdout.
+func readInputs(names []string) ([]inputDoc, error) {
+	docs := make([]inputDoc, 0, len(names))
+	for _, name := range names {
+		if name == "-" {
+			data, err := io.ReadAll(os.Stdin)
+			if err != nil {
+				return nil, fmt.Errorf("read stdin: %v", err)
+			}
+			docs = append(docs, inputDoc{name: "(stdin)", data: data})
+			continue
+		}
+		data, err := os.ReadFile(name) // #nosec G703,G304
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %v", name, err)
+		}
+		docs = append(docs, inputDoc{name: name, data: data})
+	}
+	return docs, nil
+}
+
 // renderWholeDoc prints one parsed document without a query: formatted
-// HCL by default, compact HCL or JSON with -c and -j.
+// HCL by default, JSON with -j, one line of compact JSON with -c.
 func renderWholeDoc(data []byte, name string, compact, jsonBool bool, force colorForce, stdout io.Writer) error {
 	if !compact && !jsonBool {
 		return formatHCL(bytes.NewReader(data), stdout, force)
@@ -219,14 +230,10 @@ func renderWholeDoc(data []byte, name string, compact, jsonBool bool, force colo
 	}
 	p := paletteFor(stdout, force)
 	var line string
-	if jsonBool {
-		if compact {
-			line = renderJSONCompact(root, p) + "\n"
-		} else {
-			line = renderJSON(root, p)
-		}
+	if compact {
+		line = renderJSONCompact(root, p) + "\n"
 	} else {
-		line = renderHCLColored(root, p) + "\n"
+		line = renderJSON(root, p)
 	}
 	_, err = io.WriteString(stdout, line)
 	return err
@@ -242,8 +249,8 @@ func printNode(w io.Writer, n *tree.Node, compact, raw bool, force colorForce) e
 	p := paletteFor(w, force)
 	var line string
 	if compact {
-		// Compact output is one line of valid HCL, not JSON.
-		line = renderHCLColored(n, p) + "\n"
+		// One line of compact JSON, like jq -c.
+		line = renderJSONCompact(n, p) + "\n"
 	} else {
 		// Pretty JSON with two-space indent.
 		line = renderJSON(n, p)

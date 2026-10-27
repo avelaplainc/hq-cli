@@ -119,8 +119,8 @@ The sample file for this table appears in [Examples](#examples).
 
 | Flag | Effect |
 |------|--------|
-| `-c`, `--compact` | Print the output on one line: compact JSON for queries, compact HCL for the whole document (compact JSON with `-j`). |
-| `-j`, `--json` | When there is no expression, print as JSON instead of formatted HCL. With an expression, it has no effect: query results are already JSON. |
+| `-c`, `--compact` | Print the output on one line, as compact JSON. Same output for queries and whole documents. |
+| `-j`, `--json` | When there is no expression, print as pretty JSON instead of formatted HCL. With an expression, it has no effect: query results are already JSON. |
 | `-r`, `--raw` | Print scalar results raw (strings without quotes). Non-scalar results are unaffected. |
 | `-e`, `--error` | Exit with code 1 when the query has no matches. |
 | `-C`, `--color-output` | Force colors on. |
@@ -139,19 +139,25 @@ The sample file for this table appears in [Examples](#examples).
   (string, number, boolean, null) print without quotes.
 - A query with no matches prints nothing to standard output and exits
   with code 0. With `-e`, it exits with code 1.
+- A query that does not fit the data is an error with exit code 1, like
+  jq: an index on a string, a name on an array, an iteration over a
+  scalar, or an unknown function after a pipe.
 
 **Format mode** (no expression):
 
 - Default: the formatted HCL document. `-j`: pretty JSON of the whole
-  tree. `-c`: one line (compact HCL, or compact JSON with `-j`).
-- The HCL layout is canonical:
-  - two-space indent and `=` alignment, like `terraform fmt`;
-  - blocks and objects that sit on one line break into one item per line;
-  - one blank line between sibling items (blocks and attributes at the
-    same level), except before the first item of a body;
-  - comment lines stay attached to the item they describe;
+  tree. `-c`: one line of compact JSON.
+- The HCL layout is `hclwrite.Format`, the same engine terraform fmt
+  uses:
+  - two-space indent and `=` alignment;
+  - blank lines are kept exactly as written: none are added, removed,
+    or collapsed, and newlines at the end of the file stay;
+  - CRLF line endings are kept, so formatting a CRLF file does not
+    rewrite every line;
+  - single-line blocks and objects stay single-line until the source
+    itself breaks them;
   - heredoc content stays byte for byte;
-  - exactly one newline at the end of the output.
+  - formatting is idempotent: `hq` of `hq file` is `hq file`.
 
 ### Exit codes
 
@@ -221,12 +227,18 @@ is plain by default.
 | `[]`, `.*`, `*` | Splat: all array items, or all object field values |
 | `\| length` | Number of object fields, array items, or 1 for scalars |
 | `\| keys` | Array of the object field keys, in order |
+| `\| not` | The jq truthiness inverse: `true` for `false` and `null`, else `false` |
 | `\|` | Pipe: send the result to the next operation |
 
 Semantics:
 
-- A segment that matches nothing produces no result, not an error. An
+- A name that a node does not hold produces no result, not an error. An
   index out of range for an array is a no-match.
+- A segment that does not fit a node is an error, like jq: an index on
+  a string or an object, a name on an array, or an iteration over a
+  scalar.
+- After a pipe, a bare name must be one of the three functions above.
+  Any other name is an error, not a silent no-match.
 - An expression that does not parse is an error: a message on standard
   error and exit code 1.
 - Repeated HCL blocks with the same type and labels fold into an array
@@ -242,7 +254,9 @@ Semantics:
 - Heredocs evaluate to plain strings.
 - An expression that needs variables or functions (for example `var.ami`)
   can not be evaluated on its own. `hq` returns the expression source
-  text as the string value.
+  text as the string value. For a quoted template, like
+  `"ami-${var.x}"`, that text is the template between the quote signs,
+  `ami-${var.x}`, so JSON and `-r` output agree.
 - Object constructor values (`tags = { name = "web" }`) keep source
   order, even when some items hold variables. Queries reach every item:
   `.output.mock.value.prefix` returns `var.resource_prefix`.
@@ -314,20 +328,17 @@ terraform {
 
 resource "aws_instance" "web" {
   ami           = "ami-123456"
-
   instance_type = "t3.micro"
-
   ports         = [80, 443]
 }
 
 resource "aws_instance" "db" {
   ami           = var.base_ami
-
   instance_type = "t3.small"
 }
 
 $ hq -c main.tf
-{ terraform = { required_version = ">= 1.5" }, resource = { aws_instance = { web = { ami = "ami-123456", instance_type = "t3.micro", ports = [80, 443] }, db = { ami = "var.base_ami", instance_type = "t3.small" } } } }
+{"terraform":{"required_version":">= 1.5"},"resource":{"aws_instance":{"web":{"ami":"ami-123456","instance_type":"t3.micro","ports":[80,443]},"db":{"ami":"var.base_ami","instance_type":"t3.small"}}}}
 
 $ hq -j main.tf
 {

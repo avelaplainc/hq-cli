@@ -40,7 +40,7 @@ func TestEval(t *testing.T) {
 			Kind:   tree.KindObject,
 			Fields: []tree.Field{{Key: `a"b\c`, Val: scalar}},
 		}, want: []*tree.Node{scalar}},
-		{name: "splat then field", expr: ".labels[].x", root: fix, wantNoMatch: true},
+		{name: "splat then field errors", expr: ".labels[].x", root: fix, wantErr: "can not index a string"},
 		{name: "pipe length object", expr: ".meta | length", root: fix, want: []*tree.Node{{Kind: tree.KindNumber, Num: "1"}}},
 		{name: "pipe length array", expr: ".labels | length", root: fix, want: []*tree.Node{{Kind: tree.KindNumber, Num: "2"}}},
 		{name: "pipe length scalar", expr: ".meta.count | length", root: fix, want: []*tree.Node{{Kind: tree.KindNumber, Num: "1"}}},
@@ -55,9 +55,9 @@ func TestEval(t *testing.T) {
 			Fields: []tree.Field{{Key: "length", Val: scalar}},
 		}, want: []*tree.Node{{Kind: tree.KindNumber, Num: "1"}}},
 		{name: "missing key", expr: ".absent", root: fix, wantNoMatch: true},
-		{name: "field on array drops", expr: ".labels.x", root: fix, wantNoMatch: true},
-		{name: "index on object drops", expr: ".meta[0]", root: fix, wantNoMatch: true},
-		{name: "whitespace around tokens", expr: " .meta  |  length ", root: fix, want: []*tree.Node{{Kind: tree.KindNumber, Num: "1"}}},
+		{name: "field on array errors", expr: ".labels.x", root: fix, wantErr: "can not index an array"},
+		{name: "index on object errors", expr: ".meta[0]", root: fix, wantErr: "can not index an object"},
+		{name: "not inverts truth", expr: ".meta | not", root: fix, want: []*tree.Node{{Kind: tree.KindBool, Bool: false}}},
 
 		{name: "empty expression", expr: "", root: fix, wantErr: "unexpected end of expression"},
 		{name: "dot then name missing", expr: ".a.", root: fix, wantErr: "after '.'"},
@@ -65,6 +65,7 @@ func TestEval(t *testing.T) {
 		{name: "unclosed string key", expr: `["x`, root: fix, wantErr: "unterminated string"},
 		{name: "invalid escape", expr: `["x\q"]`, root: fix, wantErr: "invalid escape"},
 		{name: "unexpected character", expr: ".a@", root: fix, wantErr: `unexpected character "@" at offset 2`},
+		{name: "unknown function", expr: ".meta | to_entries", root: fix, wantErr: "not a query function"},
 	}
 
 	for _, tt := range tests {

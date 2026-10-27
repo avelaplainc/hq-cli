@@ -20,12 +20,18 @@ func Eval(expr string, root *tree.Node) ([]*tree.Node, error) {
 	}
 	ctx := []*tree.Node{root}
 	for _, u := range units {
+		var err error
 		if u.fn != "" {
-			ctx = applyFn(ctx, u.fn)
+			ctx, err = applyFn(ctx, u.fn)
 		} else {
 			for _, s := range u.segs {
-				ctx = applySegment(ctx, s)
+				if ctx, err = applySegment(ctx, s); err != nil {
+					break
+				}
 			}
+		}
+		if err != nil {
+			return nil, err
 		}
 	}
 	if ctx == nil {
@@ -62,6 +68,7 @@ func parseUnits(expr string) ([]unit, error) {
 		if err != nil {
 			return nil, err
 		}
+		p.afterPipe = false
 		units = append(units, u)
 		p.skipWS()
 		if p.eof() {
@@ -71,6 +78,7 @@ func parseUnits(expr string) ([]unit, error) {
 			return nil, p.unexpected()
 		}
 		p.pos++
+		p.afterPipe = true
 	}
 }
 
@@ -99,9 +107,13 @@ func (p *parser) parseUnit() (unit, error) {
 	case isIdentStart(c):
 		name := p.scanIdent()
 		p.skipWS()
-		if (name == "length" || name == "keys") && (p.eof() || p.cur() == '|') {
+		if isFn(name) && (p.eof() || p.cur() == '|') {
 			u.fn = name
 			return u, nil
+		}
+		if p.afterPipe {
+			// After a pipe, a bare name can only be a function.
+			return u, fmt.Errorf("query: %s is not a query function", name)
 		}
 		u.segs = append(u.segs, segment{kind: segField, field: name})
 	default:
@@ -240,8 +252,14 @@ func (p *parser) unexpected() error {
 }
 
 type parser struct {
-	expr string
-	pos  int
+	expr      string
+	pos       int
+	afterPipe bool // the unit that follows the last '|' has begun
+}
+
+// isFn tells if name is one of the pipe functions.
+func isFn(name string) bool {
+	return name == "length" || name == "keys" || name == "not"
 }
 
 func (p *parser) eof() bool { return p.pos >= len(p.expr) }
@@ -277,19 +295,26 @@ func isIdentChar(c byte) bool {
 
 func isDigit(c byte) bool { return '0' <= c && c <= '9' }
 
-// applySegment maps every context node through one path segment.
-// Nodes that do not fit the segment are dropped.
-func applySegment(ctx []*tree.Node, s segment) []*tree.Node {
+// applySegment maps every context node through one path segment. A
+// segment that does not fit a node, like an index on a string, is an
+// error, like jq. A name that a node does not hold is no match.
+func applySegment(ctx []*tree.Node, s segment) ([]*tree.Node, error) {
 	out := make([]*tree.Node, 0, len(ctx))
 	for _, n := range ctx {
 		switch s.kind {
 		case segField:
+			if n.Kind == tree.KindArray {
+				return nil, fmt.Errorf("query: can not index an array with the name %q", s.field)
+			}
+			if n.Kind != tree.KindObject {
+				return nil, fmt.Errorf("query: can not index %s with %q", kindName(n), s.field)
+			}
 			if v := n.Get(s.field); v != nil {
 				out = append(out, v)
 			}
 		case segIndex:
 			if n.Kind != tree.KindArray {
-				continue
+				return nil, fmt.Errorf("query: can not index %s with a number", kindName(n))
 			}
 			i := s.index
 			if i < 0 {
@@ -306,15 +331,20 @@ func applySegment(ctx []*tree.Node, s segment) []*tree.Node {
 				for _, f := range n.Fields {
 					out = append(out, f.Val)
 				}
+			default:
+				return nil, fmt.Errorf("query: can not iterate over %s", kindName(n))
 			}
 		}
 	}
-	return out
+	return out, nil
 }
 
-// applyFn maps every context node through 'length' or 'keys'.
+// applyFn maps every context node through 'length', 'keys', or 'not'.
 // A non-object node yields no match for 'keys'.
-func applyFn(ctx []*tree.Node, name string) []*tree.Node {
+func applyFn(ctx []*tree.Node, name string) ([]*tree.Node, error) {
+	if !isFn(name) {
+		return nil, fmt.Errorf("query: %s is not a query function", name)
+	}
 	out := make([]*tree.Node, 0, len(ctx))
 	for _, n := range ctx {
 		switch name {
@@ -341,7 +371,39 @@ func applyFn(ctx []*tree.Node, name string) []*tree.Node {
 				items = append(items, &tree.Node{Kind: tree.KindString, Str: f.Key})
 			}
 			out = append(out, &tree.Node{Kind: tree.KindArray, Items: items})
+		case "not":
+			out = append(out, &tree.Node{Kind: tree.KindBool, Bool: !truthy(n)})
 		}
 	}
-	return out
+	return out, nil
+}
+
+// truthy follows jq: null and false are false, all else is true.
+func truthy(n *tree.Node) bool {
+	switch n.Kind {
+	case tree.KindNull:
+		return false
+	case tree.KindBool:
+		return n.Bool
+	default:
+		return true
+	}
+}
+
+// kindName names a node for error messages.
+func kindName(n *tree.Node) string {
+	switch n.Kind {
+	case tree.KindObject:
+		return "an object"
+	case tree.KindArray:
+		return "an array"
+	case tree.KindString:
+		return "a string"
+	case tree.KindNumber:
+		return "a number"
+	case tree.KindBool:
+		return "a boolean"
+	default:
+		return "null"
+	}
 }
